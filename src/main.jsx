@@ -26,31 +26,69 @@ function Food({type}) {
 
 function LeafFeast() {
   const scene = useRef(null);
-  const [active, setActive] = useState(0);
+  const video = useRef(null);
+  const [progress, setProgress] = useState(0);
+  const [ready, setReady] = useState(false);
+
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      const items = gsap.utils.toArray('.dish');
-      gsap.set(items,{scale:0.2,autoAlpha:0,rotate:-12});
-      const tl = gsap.timeline({scrollTrigger:{trigger:scene.current,start:'top top',end:'+=2300',pin:true,scrub:0.8, onUpdate:self=>setActive(Math.min(dishes.length,Math.floor(self.progress*dishes.length)+1))}});
-      tl.fromTo('.leaf-art',{scale:.72,rotateX:42,rotateZ:-8,y:70},{scale:1,rotateX:8,rotateZ:0,y:0,duration:1,ease:'power2.out'});
-      items.forEach((item,i)=>tl.to(item,{scale:1,autoAlpha:1,rotate:0,duration:.38,ease:'back.out(1.7)'},1+i*.62));
-      tl.to('.feast-caption',{autoAlpha:0,y:-20,duration:.35},1.5);
-      tl.to('.feast-finish',{autoAlpha:1,y:0,duration:.5},6.6);
-    },scene);
-    return () => ctx.revert();
-  },[]);
-  return <section className="feast-scroll" ref={scene} id="experience">
-    <div className="feast-copy"><p className="eyebrow light">A FEAST, REIMAGINED</p><h2 className="feast-caption">Every leaf tells<br/><em>a delicious story.</em></h2><div className="feast-finish"><span className="finish-line">THE COMPLETE SARA FEAST</span><h2>Served with<br/><em>love & abundance.</em></h2><p>Tradition, colour and unforgettable flavour — all on one leaf.</p></div><div className="dish-count">{String(active).padStart(2,'0')} <span>/ 09 · COURSES</span></div></div>
-    <div className="leaf-stage"><div className="leaf-shadow"/><div className="leaf-art">
-      <svg className="leaf-svg" viewBox="0 0 800 520" role="img" aria-label="Fresh green banana leaf">
-        <defs><linearGradient id="leafG" x1="0" y1="0" x2="1" y2="1"><stop stopColor="#8caf54"/><stop offset=".48" stopColor="#477a3c"/><stop offset="1" stopColor="#244d31"/></linearGradient><linearGradient id="vein" x1="0" y1="0" x2="0" y2="1"><stop stopColor="#d4df8d"/><stop offset="1" stopColor="#75984c"/></linearGradient></defs>
-        <path d="M45 260 Q150 30 400 28 Q650 35 755 260 Q640 485 400 492 Q150 480 45 260Z" fill="url(#leafG)" stroke="#b0c978" strokeWidth="3"/>
-        {Array.from({length:17},(_,i)=><path key={i} d={`M400 260 Q${400+(i-8)*42} ${150+Math.abs(i-8)*7} ${55+i*43} ${90+((i*37)%340)}`} fill="none" stroke="#c1d786" strokeOpacity=".32" strokeWidth="2"/>)}
-        <path d="M55 260 Q400 255 748 260" fill="none" stroke="url(#vein)" strokeWidth="5" opacity=".8"/>
-        <path d="M400 30 Q395 260 400 490" fill="none" stroke="#d5e29a" strokeOpacity=".5" strokeWidth="3"/>
-      </svg>
-      {dishes.map((d,i)=><div className="dish" key={d.type} style={{left:d.x+'%',top:d.y+'%'}}><Food type={d.type}/><span>{d.name}</span></div>)}
-    </div><p className="leaf-hint"><span/> SCROLL TO SERVE</p></div>
+    const el = video.current;
+    if (!el) return;
+    let trigger;
+    let disposed = false;
+    const setup = () => {
+      if (disposed || !Number.isFinite(el.duration) || !el.duration) return;
+      setReady(true);
+      trigger = ScrollTrigger.create({
+        trigger: scene.current,
+        start: 'top top',
+        end: () => '+=' + Math.max(1800, el.duration * 190),
+        pin: true,
+        scrub: 0.25,
+        anticipatePin: 1,
+        invalidateOnRefresh: true,
+        onUpdate: self => {
+          const p = self.progress;
+          setProgress(p);
+          if (el.readyState >= 2) {
+            const nextTime = Math.min(el.duration - 0.04, Math.max(0, p * el.duration));
+            if (Math.abs(el.currentTime - nextTime) > 0.035) el.currentTime = nextTime;
+          }
+        }
+      });
+    };
+    if (el.readyState >= 1) setup();
+    else el.addEventListener('loadedmetadata', setup, { once: true });
+    return () => {
+      disposed = true;
+      el.removeEventListener('loadedmetadata', setup);
+      trigger?.kill();
+    };
+  }, []);
+
+  return <section className="feast-scroll video-feast" ref={scene} id="experience">
+    <video
+      ref={video}
+      className="feast-video"
+      src="https://raw.githubusercontent.com/vctwit029-hu/Catering/main/feast.mp4"
+      muted
+      playsInline
+      preload="auto"
+      disablePictureInPicture
+      aria-label="Cinematic South Indian non-vegetarian banana leaf feast"
+    />
+    <div className="video-feast-shade" />
+    <div className="video-feast-top">
+      <p className="eyebrow light">A FEAST, REIMAGINED</p>
+      <span>SCROLL TO SERVE</span>
+    </div>
+    <div className="video-feast-bottom">
+      <div>
+        <span className="finish-line">THE SARA CATERING EXPERIENCE</span>
+        <h2>{progress > 0.88 ? <>A grand feast,<br/><em>served with love.</em></> : <>Every leaf tells<br/><em>a delicious story.</em></>}</h2>
+      </div>
+      <div className="feast-progress"><span>{String(Math.round(progress * 100)).padStart(2,'0')}%</span><i><b style={{width:(progress*100)+'%'}} /></i></div>
+    </div>
+    {!ready && <div className="video-loading">Preparing the feast…</div>}
   </section>;
 }
 
