@@ -27,41 +27,91 @@ function Food({type}) {
 function LeafFeast() {
   const scene = useRef(null);
   const video = useRef(null);
+  const triggerRef = useRef(null);
+  const playingRef = useRef(false);
   const [progress, setProgress] = useState(0);
   const [ready, setReady] = useState(false);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
     const el = video.current;
-    if (!el) return;
+    const section = scene.current;
+    if (!el || !section) return;
     let trigger;
     let disposed = false;
+
+    const blockScroll = event => {
+      if (playingRef.current) event.preventDefault();
+    };
+    const blockKeys = event => {
+      if (playingRef.current && ['ArrowDown','ArrowUp','PageDown','PageUp','Space',' '].includes(event.key)) event.preventDefault();
+    };
+    const finishPlayback = () => {
+      playingRef.current = false;
+      window.removeEventListener('wheel', blockScroll);
+      window.removeEventListener('touchmove', blockScroll);
+      window.removeEventListener('keydown', blockKeys);
+      setProgress(1);
+      if (trigger) {
+        trigger.scroll(trigger.end);
+        ScrollTrigger.update();
+      }
+    };
+    const startPlayback = () => {
+      if (playingRef.current || el.ended) return;
+      playingRef.current = true;
+      setStarted(true);
+      window.addEventListener('wheel', blockScroll, { passive: false });
+      window.addEventListener('touchmove', blockScroll, { passive: false });
+      window.addEventListener('keydown', blockKeys);
+      el.play().catch(() => {
+        playingRef.current = false;
+        window.removeEventListener('wheel', blockScroll);
+        window.removeEventListener('touchmove', blockScroll);
+        window.removeEventListener('keydown', blockKeys);
+      });
+    };
+    const onTime = () => {
+      if (Number.isFinite(el.duration) && el.duration > 0) setProgress(el.currentTime / el.duration);
+    };
     const setup = () => {
       if (disposed || !Number.isFinite(el.duration) || !el.duration) return;
       setReady(true);
       trigger = ScrollTrigger.create({
-        trigger: scene.current,
+        trigger: section,
         start: 'top top',
-        end: () => '+=' + Math.max(3000, el.duration * 300),
+        end: '+=1200',
         pin: true,
-        scrub: 0.25,
+        scrub: false,
         anticipatePin: 1,
         invalidateOnRefresh: true,
-        onUpdate: self => {
-          const p = self.progress;
-          setProgress(p);
-          if (el.readyState >= 2) {
-            const nextTime = Math.min(el.duration - 0.04, Math.max(0, p * el.duration));
-            if (Math.abs(el.currentTime - nextTime) > 0.035) el.currentTime = nextTime;
+        onEnter: startPlayback,
+        onEnterBack: () => {
+          if (el.ended) {
+            el.currentTime = 0;
+            setProgress(0);
           }
+          startPlayback();
         }
       });
+      triggerRef.current = trigger;
     };
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('ended', finishPlayback);
     if (el.readyState >= 1) setup();
     else el.addEventListener('loadedmetadata', setup, { once: true });
     return () => {
       disposed = true;
+      playingRef.current = false;
+      el.pause();
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('ended', finishPlayback);
       el.removeEventListener('loadedmetadata', setup);
+      window.removeEventListener('wheel', blockScroll);
+      window.removeEventListener('touchmove', blockScroll);
+      window.removeEventListener('keydown', blockKeys);
       trigger?.kill();
+      triggerRef.current = null;
     };
   }, []);
 
@@ -81,7 +131,7 @@ function LeafFeast() {
     <div className="video-feast-shade" />
     <div className="video-feast-top">
       <p className="eyebrow light">A FEAST, REIMAGINED</p>
-      <span>SCROLL TO SERVE</span>
+      <span>{started ? 'YOUR FEAST IS BEING SERVED' : 'SCROLL ONCE TO BEGIN'}</span>
     </div>
     <div className="video-chapter"><span>NOW SERVING</span><strong>{chapter}</strong></div>
     <div className="video-feast-bottom">
